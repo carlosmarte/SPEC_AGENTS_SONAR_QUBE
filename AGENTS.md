@@ -12,7 +12,7 @@ This is a specification repository, not an application repository.
 - Preserve secret and data boundaries: never copy credential values, keychain
   manifests, exported Sonar data, tokens, or private organization/project data
   into this repository.
-- Reuse the stated dependency contracts instead of specifying duplicate
-  transport or keychain layers.
+- Reuse generic HTTP fetch and `keychain-env` packages instead of specifying
+  duplicate transport or keychain layers.
 - When changing behavior specifications, update the matching acceptance
   scenario and the observed-baseline note if the source implementation changes.

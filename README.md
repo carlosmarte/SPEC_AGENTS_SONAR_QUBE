@@ -13,10 +13,8 @@ important edge cases:
 - [Observed baseline and open concerns](spec/observed-baseline.md)
 - [Agent skill](skills/sonarqube-export-spec/SKILL.md)
 
-The intended HTTP client and secret-provider dependencies are
-[`fetch-undici`](https://github.com/multistageharness/http-fetch-undici) and
-[`macos-keychain-env`](https://github.com/multistageharness/macos-keychain-env).
-Their contracts are referenced here; their source code is not copied.
+Use generic HTTP fetch and `keychain-env` packages for HTTP transport and
+keychain-backed secret resolution. Their source code is not included here.
 
 ## Scope boundary
 

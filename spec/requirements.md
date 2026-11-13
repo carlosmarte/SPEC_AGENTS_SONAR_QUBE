@@ -15,7 +15,8 @@ acceptance scenarios.
 
 1. **Credential resolution** — resolve `SONAR_TOKEN` from an already-provided
    environment value or from the approved macOS keychain manifest.
-2. **Authenticated HTTP client** — issue API requests through `fetch-undici`
+2. **Authenticated HTTP client** — issue API requests through an HTTP fetch
+   package
    with bearer authentication, explicit timeouts, retry policy, and lifecycle
    cleanup.
 3. **Sonar API adapter** — map endpoint-relative requests to `/api/` paths,
@@ -56,8 +57,8 @@ acceptance scenarios.
 
 ### API transport and pagination
 
-- **REQ-HTTP-001** API requests MUST use bearer authentication and the
-  `fetch-undici` client; the application-level adapter MUST address
+- **REQ-HTTP-001** API requests MUST use bearer authentication and a generic
+  HTTP fetch package; the application-level adapter MUST address
   `/api/<endpoint>` and pass query parameters without silently changing them.
 - **REQ-HTTP-002** Connect and read timeouts MUST be finite; retryable
   transient statuses MUST include 429, 500, 502, 503, and 504, with
@@ -122,7 +123,7 @@ acceptance scenarios.
 
 - **REQ-SEC-001** Secret values MUST NOT be committed, logged, printed in
   errors, serialized into manifests, or included in test fixtures.
-- **REQ-SEC-002** Use `macos-keychain-env` for keychain-backed secret
+- **REQ-SEC-002** Use a generic `keychain-env` package for keychain-backed secret
   resolution. Existing environment variables remain the non-macOS / CI path;
   keychain access MUST only be attempted when needed.
 - **REQ-SEC-003** A `.env.keychain` manifest MUST be treated as untrusted input
@@ -135,29 +136,24 @@ acceptance scenarios.
 - **REQ-SEC-005** Diagnostics and error records MUST avoid including bearer
   credentials or response content that could expose secret material.
 
-## Dependency contracts
+## Package responsibilities
 
-### `fetch-undici`
+### HTTP fetch package
 
-Use the package as the HTTP transport and authentication layer, not as a
-second application-level retry or pagination implementation. The observed
-source uses `AsyncClient`, `BearerAuth`, finite connect/read timeouts, and
-`JitterStrategy.FULL`. Retry policy includes transient server/rate-limit
-statuses, exception retries, exponential delay, a maximum delay, and
-`Retry-After` support. The adapter above it translates API paths, parses JSON,
-and makes HTTP status explicit to exporter-level resource handling.
+Use an HTTP fetch package as the transport and authentication layer, not as a
+second application-level retry or pagination implementation. It should
+support bearer authentication, finite connect/read timeouts, transient
+server/rate-limit retries, bounded backoff, jitter, and `Retry-After`
+handling. The application adapter translates API paths, parses JSON, and
+makes HTTP status explicit to exporter-level resource handling.
 
-Reference: <https://github.com/multistageharness/http-fetch-undici>
+### `keychain-env` package
 
-### `macos-keychain-env`
-
-Use `loadEnv()` (or its documented equivalent) to resolve approved
+Use the package's documented API to resolve approved
 `keychain://` references into the process environment. Respect environment
 variable precedence, trusted-manifest behavior, and platform constraints.
 Never read a secret merely to check whether it is present; use the package's
 check/presence API when needed.
-
-Reference: <https://github.com/multistageharness/macos-keychain-env>
 
 ## Verification model
 

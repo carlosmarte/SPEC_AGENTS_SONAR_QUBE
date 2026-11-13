@@ -24,9 +24,9 @@ acceptance scenarios, or agent guidance.
 5. Prefer fake-server and temporary-directory acceptance tests. Keep live
    SonarCloud tests opt-in and never require a real token for ordinary
    verification.
-6. Reuse the dependency contracts documented in requirements for
-   `fetch-undici` and `macos-keychain-env`; do not duplicate or re-specify
-   their internal mechanisms.
+6. Reuse the generic package responsibilities documented in requirements
+   for HTTP fetch and `keychain-env`; do not duplicate or re-specify their
+   internal mechanisms.
 7. Check that the update introduces no runtime implementation, secret,
    `.env.keychain` file, token, exported data, or private organization/project
    detail.

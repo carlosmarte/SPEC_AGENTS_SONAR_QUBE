@@ -10,9 +10,9 @@ No credential file, credential value, or exported data was copied.
 - The project is a Node.js ES module with a minimum Node version of 20.19.
 - The default endpoint is `https://sonarcloud.io`; output defaults to `data/`
   and project concurrency defaults to three.
-- `SONAR_TOKEN` is resolved through `macos-keychain-env`; the entrypoint
+- `SONAR_TOKEN` is resolved through a keychain-env package; the entrypoint
   rejects startup when the token is not available.
-- The exporter uses `fetch-undici` with bearer auth, finite timeouts, retries,
+- The exporter uses an HTTP fetch package with bearer auth, finite timeouts, retries,
   jitter, and Retry-After support. The client is closed in a `finally` block.
 - Pagination handles both Sonar paging metadata styles, stops on empty pages,
   and marks results truncated at the 10,000-result ceiling.
@@ -31,8 +31,8 @@ No credential file, credential value, or exported data was copied.
 These are not new requirements and are not represented as solved:
 
 1. The source concern note reports that a clean clone may not install because
-   dependencies point to ignored `vendors/` directories and
-   `fetch-undici` needs to be built. Dependency bootstrap/reproducibility
+   dependencies point to ignored `vendors/` directories and the HTTP fetch
+   package needs to be built. Dependency bootstrap/reproducibility
    remains an open implementation concern.
 2. The source README contains only a heading. Usage, credential setup,
    configuration, tests, and output documentation remain missing there.
