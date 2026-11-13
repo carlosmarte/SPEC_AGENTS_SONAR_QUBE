@@ -12,6 +12,22 @@ Feature: Export accessible SonarCloud data
     When those three settings are supplied
     Then the supplied values are used
 
+  @REQ-CONFIG-007
+  Scenario Outline: Reject an invalid concurrency setting at startup
+    Given SONAR_CONCURRENCY is set to "<value>"
+    When an export is started
+    Then startup fails with a message naming SONAR_CONCURRENCY
+    And no API request is sent
+    And no output files are written
+
+    Examples:
+      | value |
+      |       |
+      | abc   |
+      | 0     |
+      | -1    |
+      | 2.5   |
+
   @REQ-CONFIG-005 @REQ-EXPORT-001 @REQ-ERROR-004 @REQ-CONFIG-006
   Scenario: Reject invalid credentials before creating export files
     Given the authentication validation endpoint rejects the token
@@ -26,6 +42,7 @@ Feature: Export accessible SonarCloud data
     And a keychain reference is configured
     When the exporter initializes credentials
     Then the environment value takes precedence
+    And keychain resolution is not attempted, even if the keychain manifest is not approved
     And no secret value is written to logs, errors, or the manifest
 
   @REQ-SEC-002 @REQ-SEC-003
@@ -44,6 +61,8 @@ Feature: Export accessible SonarCloud data
     Then organization and project JSON resources are written under the output directory
     And the manifest lists the organization and project count
     And the manifest request and file counts match the export
+    And the manifest file count includes manifest.json itself
+    And the summary returned to the caller equals the manifest on disk
 
   @REQ-HTTP-001 @REQ-HTTP-003
   Scenario: Preserve API path, parameters, and HTTP failure context
@@ -74,6 +93,23 @@ Feature: Export accessible SonarCloud data
     Then the saved collection contains no more than 10000 results
     And the saved collection is marked truncated
     And the truncation note identifies the cap
+
+  @REQ-PAGE-005
+  Scenario: Page measure history by history points
+    Given a project's measure history has 3 metrics and 2500 history points
+    And the server returns at most 1000 history points per page
+    When the project's measure history is exported
+    Then exactly 3 history pages are requested
+    And each metric appears exactly once in the saved resource
+    And each metric has all 2500 history points in date order
+    And the saved resource is not marked truncated
+
+  @REQ-PAGE-006
+  Scenario: Mark a capped collection that is not paged
+    Given an organization has more project tags than one request can return
+    When the organization's project tags are exported
+    Then the saved collection is marked truncated
+    And the truncation note names the per-request limit
 
   @REQ-PAGE-004
   Scenario: Batch metric requests and merge measures
@@ -107,6 +143,42 @@ Feature: Export accessible SonarCloud data
     And a warning is emitted
     And unrelated resources are still attempted
 
+  @REQ-ERROR-003
+  Scenario: Record a resource whose prerequisite failed
+    Given the metric definitions endpoint fails
+    And the user can access one project
+    When an export is started
+    Then the project's measures are recorded as failed in the manifest
+    And no project measures file containing an empty measure list is written
+
+  @REQ-ERROR-005
+  Scenario: Fail the run when organizations cannot be listed
+    Given authentication succeeds
+    And the organization search endpoint fails with HTTP 500
+    When an export is started
+    Then the run fails with a run-level error
+    And it does not report a successful export of zero organizations
+
+  @REQ-ERROR-006
+  Scenario Outline: Report the outcome through the exit status
+    Given an export run in which <outcome>
+    When the process exits
+    Then the exit status is <status>
+
+    Examples:
+      | outcome                                               | status                         |
+      | every resource succeeded                              | zero                           |
+      | the only failures were HTTP 401, 403, or 404          | zero                           |
+      | a resource failed with HTTP 500 or a network error    | the partial-failure status     |
+      | authentication validation failed                      | the run-level failure status   |
+
+  @REQ-SEC-005
+  Scenario: Keep raw response bodies out of error records
+    Given a resource endpoint fails with a body containing Sonar error messages and other content
+    When the failure is recorded
+    Then the error record contains the Sonar error messages, length-limited
+    And the error record does not contain the rest of the response body
+
   @REQ-HTTP-002
   Scenario: Retry a transient rate-limit response
     Given a resource endpoint responds with HTTP 429 and a Retry-After value
@@ -116,11 +188,47 @@ Feature: Export accessible SonarCloud data
     And the successful resource is written
 
   @REQ-OUTPUT-002
-  Scenario: Sanitize identifiers used in output paths
-    Given an organization or project key contains path separators or unsafe characters
+  Scenario Outline: Sanitize identifiers used in output paths
+    Given a project key "<key>"
     When its resource path is constructed
-    Then the identifier is represented by a safe filename segment
+    Then the identifier is represented by a single safe filename segment
+    And the segment is not empty, "." or ".."
     And it cannot escape the configured output directory
+
+    Examples:
+      | key       |
+      | ..        |
+      | .         |
+      | ../../etc |
+      | a/b       |
+      | a b:c     |
+
+  @REQ-OUTPUT-002
+  Scenario: Keep distinct identifiers in distinct paths
+    Given one organization has projects with keys "a/b" and "a:b"
+    When both projects are exported
+    Then each project's resources are written to a different directory
+    And neither project's files overwrite the other's
+
+  @REQ-OUTPUT-005
+  Scenario: Replace the previous snapshot without leaving stale files
+    Given the output directory holds a previous export with a webhooks resource
+    And the webhooks endpoint now responds with HTTP 403
+    When an export completes
+    Then the output directory contains no webhooks resource file
+    And the manifest records the webhooks failure
+
+  @REQ-OUTPUT-005
+  Scenario: Keep the previous snapshot when a run is interrupted
+    Given the output directory holds a previous export
+    When a new export fails with a run-level error partway through
+    Then the previous export is still present and unchanged
+
+  @REQ-OUTPUT-005
+  Scenario: Refuse to replace a directory that is not an export
+    Given the configured output directory contains files but no manifest.json
+    When an export is started
+    Then startup fails without deleting or changing any file in that directory
 
   @REQ-CONFIG-006
   Scenario: Close transport after a run-level failure
@@ -128,8 +236,9 @@ Feature: Export accessible SonarCloud data
     When the export terminates
     Then the HTTP client is closed
 
-  @REQ-SEC-001 @REQ-SEC-004 @REQ-SEC-005
-  Scenario: Keep generated data and credentials out of the specification repository
-    Given the export produces user, organization, or project data
-    When specification artifacts are updated
-    Then no exported data or secret values are included in this repository
+  @REQ-SEC-004 @REQ-OUTPUT-006
+  Scenario: Keep exported data private by default
+    Given the exporter is run with the default output directory
+    When an export completes
+    Then the output directory is excluded from source control by default
+    And exported directories and files are readable only by the owning user
